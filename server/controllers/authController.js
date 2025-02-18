@@ -6,20 +6,48 @@ const pool = new Pool({
 });
 
 const handleOAuthCallback = async (req, res) => {
+  console.log('🔐 OAuth Callback received:', { 
+    timestamp: new Date().toISOString(),
+    tokens: {
+      hasAccessToken: !!req.user?.accessToken,
+      hasRefreshToken: !!req.user?.refreshToken
+    }
+  });
+  
   const { accessToken, refreshToken } = req.user;
   
   try {
-    // Fetch user info from Oura API
+    console.log('📡 Fetching user info from Oura API...');
     const response = await fetch('https://api.ouraring.com/v2/usercollection/personal_info', {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
     });
     
+    if (!response.ok) {
+      console.error('❌ Oura API error:', {
+        status: response.status,
+        statusText: response.statusText
+      });
+      throw new Error('Failed to fetch user data from Oura API');
+    }
+
     const userData = await response.json();
+    console.log('👤 User data received:', {
+      id: userData.id,
+      hasData: !!userData,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!userData.id) {
+      console.error('❌ No user ID in response:', userData);
+      throw new Error('No user ID received from Oura API');
+    }
+
     const ouraUserId = userData.id;
 
     // Store or update user in database
+    console.log('💾 Storing user data in database...');
     const result = await pool.query(
       `INSERT INTO users (oura_user_id, access_token, refresh_token)
        VALUES ($1, $2, $3)
@@ -33,6 +61,10 @@ const handleOAuthCallback = async (req, res) => {
     );
 
     const userId = result.rows[0].id;
+    console.log('✅ Database operation successful:', {
+      userId,
+      operation: result.rowCount > 0 ? 'inserted' : 'updated'
+    });
 
     // Create JWT token
     const token = jwt.sign(
@@ -44,11 +76,19 @@ const handleOAuthCallback = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
-    // Redirect to frontend with token
-    res.redirect(`${process.env.CLIENT_URL}/dashboard?token=${token}`);
+    console.log('🎟️ JWT token created successfully');
+
+    // Redirect to frontend with both tokens
+    const redirectUrl = `${process.env.CLIENT_URL}/dashboard?token=${token}&oura_token=${accessToken}`;
+    console.log('➡️ Redirecting to:', redirectUrl);
+    res.redirect(redirectUrl);
   } catch (error) {
-    console.error('OAuth callback error:', error);
-    res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+    console.error('❌ OAuth callback error:', {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed&message=${encodeURIComponent(error.message)}`);
   }
 };
 
