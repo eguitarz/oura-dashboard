@@ -4,6 +4,7 @@ import * as d3 from 'd3';
 import Card from './common/Card';
 import { fetchHeartRate } from '../services/ouraApi';
 import { useAuth } from '../contexts/AuthContext';
+import TimeSeriesChart from './common/TimeSeriesChart';
 
 const ChartContainer = styled.div`
   width: 100%;
@@ -126,8 +127,8 @@ const aggregateData = (data, granularityMinutes) => {
   return Array.from(groups, ([timestamp, values]) => ({
     timestamp: timestamp.toISOString(),
     bpm: Math.round(d3.mean(values, d => d.bpm)),
-    min_bpm: d3.min(values, d => d.bpm),
-    max_bpm: d3.max(values, d => d.bpm),
+    min_value: d3.min(values, d => d.bpm),
+    max_value: d3.max(values, d => d.bpm),
     count: values.length
   }));
 };
@@ -153,8 +154,6 @@ const HeartRate = () => {
   const [error, setError] = useState(null);
   const [granularity, setGranularity] = useState('fine');
   const { ouraToken } = useAuth();
-  const chartRef = useRef(null);
-  const hoverCardRef = useRef(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -187,210 +186,21 @@ const HeartRate = () => {
     return aggregateData(rawData, option.minutes);
   }, [rawData, granularity]);
 
-  useEffect(() => {
-    if (data.length === 0 || !chartRef.current) return;
-
-    // Clear previous chart
-    d3.select(chartRef.current).selectAll('*').remove();
-
-    // Set up dimensions
-    const margin = { top: 20, right: 30, bottom: 30, left: 40 };
-    const width = chartRef.current.clientWidth - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
-
-    // Create SVG
-    const svg = d3.select(chartRef.current)
-      .append('svg')
-      .attr('width', width + margin.left + margin.right)
-      .attr('height', height + margin.top + margin.bottom)
-      .append('g')
-      .attr('transform', `translate(${margin.left},${margin.top})`);
-
-    // Set up scales
-    const x = d3.scaleTime()
-      .domain(d3.extent(data, d => new Date(d.timestamp)))
-      .range([0, width]);
-
-    const y = d3.scaleLinear()
-      .domain([
-        d3.min(data, d => d.min_bpm || d.bpm) - 5,
-        d3.max(data, d => d.max_bpm || d.bpm) + 5
-      ])
-      .range([height, 0]);
-
-    // Create line generator
-    const line = d3.line()
-      .x(d => x(new Date(d.timestamp)))
-      .y(d => y(d.bpm))
-      .curve(d3.curveMonotoneX);
-
-    // Add axes
-    svg.append('g')
-      .attr('transform', `translate(0,${height})`)
-      .call(d3.axisBottom(x).ticks(5));
-
-    svg.append('g')
-      .call(d3.axisLeft(y));
-
-    // Add line path
-    svg.append('path')
-      .datum(data)
-      .attr('fill', 'none')
-      .attr('stroke', '#007bff')
-      .attr('stroke-width', 2)
-      .attr('d', line);
-
-    // Add dots
-    const dots = svg.selectAll('.dot')
-      .data(data)
-      .enter()
-      .append('circle')
-      .attr('class', 'dot')
-      .attr('cx', d => x(new Date(d.timestamp)))
-      .attr('cy', d => y(d.bpm))
-      .attr('r', 4)
-      .attr('fill', '#007bff')
-      .attr('stroke', 'white')
-      .attr('stroke-width', 1.5);
-
-    // Add vertical hover line (hidden by default)
-    const hoverLine = svg.append('line')
-      .attr('class', 'hover-line')
-      .attr('y1', 0)
-      .attr('y2', height)
-      .style('stroke', '#6c757d')
-      .style('stroke-width', 1)
-      .style('stroke-dasharray', '3,3')
-      .style('opacity', 0);
-
-    // Add invisible overlay for mouse tracking
-    const overlay = svg.append('rect')
-      .attr('class', 'overlay')
-      .attr('width', width)
-      .attr('height', height)
-      .style('fill', 'none')
-      .style('pointer-events', 'all');
-
-    const showHoverEffects = (mouseX) => {
-      const closestPoint = findClosestDataPoint(mouseX, data, x);
-      
-      if (!closestPoint) {
-        // Hide hover effects if no close point
-        hoverLine.style('opacity', 0);
-        dots.attr('r', 4).attr('stroke-width', 1.5);
-        d3.select(hoverCardRef.current).classed('visible', false);
-        return;
-      }
-
-      // Update hover line
-      const xPos = x(new Date(closestPoint.timestamp));
-      hoverLine
-        .attr('x1', xPos)
-        .attr('x2', xPos)
-        .style('opacity', 1);
-
-      // Update dots
-      dots.attr('r', d => d === closestPoint ? 6 : 4)
-          .attr('stroke-width', d => d === closestPoint ? 2 : 1.5);
-
-      // Update hover card
-      const hoverCard = d3.select(hoverCardRef.current);
-      const timestamp = new Date(closestPoint.timestamp);
-      const timeString = timestamp.toLocaleTimeString();
-      const dateString = timestamp.toLocaleDateString();
-
-      let hoverContent = `
-        <h4>Heart Rate Details</h4>
-        <p>Time: <span class="value">${timeString}</span></p>
-        <p>Date: <span class="value">${dateString}</span></p>
-        <p>BPM: <span class="value">${closestPoint.bpm}</span></p>
-      `;
-
-      if (granularity !== 'fine') {
-        hoverContent += `
-          <p>Range: <span class="value">${closestPoint.min_bpm} - ${closestPoint.max_bpm} BPM</span></p>
-          <p>Samples: <span class="value">${closestPoint.count}</span></p>
-        `;
-      }
-
-      hoverCard.html(hoverContent);
-
-      const chartRect = chartRef.current.getBoundingClientRect();
-      const hoverCardRect = hoverCardRef.current.getBoundingClientRect();
-
-      let left = mouseX + margin.left - hoverCardRect.width / 2;
-      let top = 10; // Position at top of chart
-
-      // Ensure hover card stays within chart bounds
-      left = Math.max(margin.left, Math.min(left, width + margin.left - hoverCardRect.width));
-
-      hoverCard
-        .style('left', `${left}px`)
-        .style('top', `${top}px`)
-        .classed('visible', true);
-    };
-
-    // Add mouse event handlers
-    overlay
-      .on('mousemove', (event) => {
-        const [mouseX] = d3.pointer(event);
-        showHoverEffects(mouseX);
-      })
-      .on('mouseleave', () => {
-        hoverLine.style('opacity', 0);
-        dots.attr('r', 4).attr('stroke-width', 1.5);
-        d3.select(hoverCardRef.current).classed('visible', false);
-      });
-
-    // Add labels
-    svg.append('text')
-      .attr('x', -height / 2)
-      .attr('y', -30)
-      .attr('transform', 'rotate(-90)')
-      .attr('text-anchor', 'middle')
-      .text('Heart Rate (BPM)');
-
-  }, [data, granularity]);
-
-  if (loading) {
-    return (
-      <Card>
-        <LoadingMessage>Loading heart rate data...</LoadingMessage>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <ErrorMessage>{error}</ErrorMessage>
-      </Card>
-    );
-  }
-
   return (
-    <Card>
-      <ChartHeader>
-        <ChartTitle>
-          <h2>Heart Rate</h2>
-          <p>Last 24 hours</p>
-        </ChartTitle>
-        <GranularitySelect
-          value={granularity}
-          onChange={(e) => setGranularity(e.target.value)}
-        >
-          {GRANULARITY_OPTIONS.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </GranularitySelect>
-      </ChartHeader>
-      <ChartContainer>
-        <div ref={chartRef} />
-        <HoverCard ref={hoverCardRef} />
-      </ChartContainer>
-    </Card>
+    <TimeSeriesChart
+      data={data}
+      title="Heart Rate"
+      subtitle="Last 24 hours"
+      loading={loading}
+      error={error}
+      yAxisLabel="Heart Rate (BPM)"
+      valueKey="bpm"
+      valueLabel="BPM"
+      granularity={granularity}
+      granularityOptions={GRANULARITY_OPTIONS}
+      onGranularityChange={(e) => setGranularity(e.target.value)}
+      formatValue={value => `${value} BPM`}
+    />
   );
 };
 

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import styled from 'styled-components';
 import { PageContainer, Container } from './common/Layout';
 import HeartRate from './HeartRate';
+import Sleep from './Sleep';
 
 const Header = styled.header`
   display: flex;
@@ -28,6 +29,10 @@ const LogoutButton = styled.button`
   }
 `;
 
+const Section = styled.section`
+  margin-bottom: 2rem;
+`;
+
 const Dashboard = () => {
   const { isAuthenticated, loading, logout } = useAuth();
 
@@ -48,7 +53,14 @@ const Dashboard = () => {
             Logout
           </LogoutButton>
         </Header>
-        <HeartRate />
+        
+        <Section>
+          <HeartRate />
+        </Section>
+
+        <Section>
+          <Sleep />
+        </Section>
       </Container>
     </PageContainer>
   );
