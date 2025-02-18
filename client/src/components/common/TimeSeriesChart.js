@@ -134,7 +134,8 @@ const TimeSeriesChart = ({
       <p>Range: <span class="value">${formatValue(point.min_value)} - ${formatValue(point.max_value)}</span></p>
       <p>Samples: <span class="value">${point.count}</span></p>
     ` : ''}
-  `
+  `,
+  suggestedRange = null
 }) => {
   const chartRef = useRef(null);
   const hoverCardRef = useRef(null);
@@ -156,7 +157,7 @@ const TimeSeriesChart = ({
       .attr('width', width + margin.left + margin.right)
       .attr('height', height + margin.top + margin.bottom)
       .append('g')
-      .attr('transform', \`translate(\${margin.left},\${margin.top})\`);
+      .attr('transform', `translate(${margin.left},${margin.top})`);
 
     // Set up scales
     const x = d3.scaleTime()
@@ -170,15 +171,27 @@ const TimeSeriesChart = ({
       ])
       .range([height, 0]);
 
+    // Add suggested range area if provided
+    if (suggestedRange) {
+      svg.append('rect')
+        .attr('x', 0)
+        .attr('y', y(suggestedRange.max))
+        .attr('width', width)
+        .attr('height', y(suggestedRange.min) - y(suggestedRange.max))
+        .attr('fill', '#e9ecef')
+        .attr('opacity', 0.5);
+    }
+
     // Create line generator
     const line = d3.line()
       .x(d => x(new Date(d.timestamp)))
-      .y(d => y(d[valueKey]))
+      .y(d => y(d[valueKey] || 0))
+      .defined(d => d[valueKey] !== null && d[valueKey] !== undefined)
       .curve(d3.curveMonotoneX);
 
     // Add axes
     svg.append('g')
-      .attr('transform', \`translate(0,\${height})\`)
+      .attr('transform', `translate(0,${height})`)
       .call(d3.axisBottom(x).ticks(5));
 
     svg.append('g')
@@ -194,12 +207,12 @@ const TimeSeriesChart = ({
 
     // Add dots
     const dots = svg.selectAll('.dot')
-      .data(data)
+      .data(data.filter(d => d[valueKey] !== null && d[valueKey] !== undefined))
       .enter()
       .append('circle')
       .attr('class', 'dot')
       .attr('cx', d => x(new Date(d.timestamp)))
-      .attr('cy', d => y(d[valueKey]))
+      .attr('cy', d => y(d[valueKey] || 0))
       .attr('r', 4)
       .attr('fill', '#007bff')
       .attr('stroke', 'white')
@@ -258,8 +271,8 @@ const TimeSeriesChart = ({
       left = Math.max(margin.left, Math.min(left, width + margin.left - hoverCardRect.width));
 
       hoverCard
-        .style('left', \`\${left}px\`)
-        .style('top', \`\${top}px\`)
+        .style('left', `${left}px`)
+        .style('top', `${top}px`)
         .classed('visible', true);
     };
 
@@ -283,7 +296,7 @@ const TimeSeriesChart = ({
         .attr('text-anchor', 'middle')
         .text(yAxisLabel);
     }
-  }, [data, valueKey, yAxisLabel, title, valueLabel, formatValue, renderHoverCard]);
+  }, [data, valueKey, yAxisLabel, title, valueLabel, formatValue, renderHoverCard, suggestedRange]);
 
   if (loading) {
     return (
