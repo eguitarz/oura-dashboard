@@ -2,10 +2,8 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import styled from 'styled-components';
-
-const DashboardContainer = styled.div`
-  padding: 20px;
-`;
+import { PageContainer, Container } from './common/Layout';
+import HeartRate from './HeartRate';
 
 const Header = styled.header`
   display: flex;
@@ -42,15 +40,17 @@ const Dashboard = () => {
   }
 
   return (
-    <DashboardContainer>
-      <Header>
-        <h1>Dashboard</h1>
-        <LogoutButton onClick={logout}>
-          Logout
-        </LogoutButton>
-      </Header>
-      <p>Your Oura ring data will be displayed here</p>
-    </DashboardContainer>
+    <PageContainer>
+      <Container>
+        <Header>
+          <h1>Dashboard</h1>
+          <LogoutButton onClick={logout}>
+            Logout
+          </LogoutButton>
+        </Header>
+        <HeartRate />
+      </Container>
+    </PageContainer>
   );
 };
 
