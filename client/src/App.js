@@ -1,23 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import styled from 'styled-components';
-
-// Placeholder components - these will be implemented in separate files
-const Login = () => (
-  <div>
-    <h1>Welcome to Oura Dashboard</h1>
-    <a href="/auth/oura" className="login-button">
-      Login with Oura
-    </a>
-  </div>
-);
-
-const Dashboard = () => (
-  <div>
-    <h1>Dashboard</h1>
-    <p>Your Oura ring data will be displayed here</p>
-  </div>
-);
+import { AuthProvider } from './contexts/AuthContext';
+import Login from './components/Login';
+import Dashboard from './components/Dashboard';
 
 const AppContainer = styled.div`
   min-height: 100vh;
@@ -44,15 +30,17 @@ const AppContainer = styled.div`
 
 function App() {
   return (
-    <AppContainer>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </Router>
-    </AppContainer>
+    <AuthProvider>
+      <AppContainer>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Router>
+      </AppContainer>
+    </AuthProvider>
   );
 }
 
